@@ -72,7 +72,12 @@ class ReplicaAwareDatabase:
 
                 port_part = f":{current_url.port}" if current_url.port else ""
                 path_part = f"/{current_url.database}" if current_url.database else ""
-                query_part = f"?{current_url.query}" if current_url.query else ""
+                
+                query_part = ""
+                # database.DatabaseURL might not have .query, so we parse it from string
+                full_url_str = str(current_url)
+                if "?" in full_url_str:
+                    query_part = f"?{full_url_str.split('?', 1)[1]}"
                 
                 new_conn_str = f"{current_url.scheme}://{user_part}{resolved_ip}{port_part}{path_part}{query_part}"
                 
