@@ -582,6 +582,7 @@ async def setup_database():
     except Exception as e:
         logger.error(f"Error setting up the database: {e}")
         logger.exception(traceback.format_exc())
+        raise e
 
 
 async def _run_startup_cleanup():
