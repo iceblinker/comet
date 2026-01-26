@@ -48,7 +48,16 @@ class ReplicaAwareDatabase:
                 for replica in self._configured_replicas
             ]
 
-        await self._wait_for_dns(self._primary)
+        resolved_ip = await self._wait_for_dns(self._primary)
+        if resolved_ip:
+            # Reconstruct the primary database instance with the resolved IP
+            # This bypasses asyncpg's internal resolution which seems flaky
+            url = make_url(str(self._primary.url))
+            if url.host != resolved_ip:
+                logger.log("DATABASE", f"Forcing connection to IP: {resolved_ip}")
+                url = url.set(host=resolved_ip)
+                # We need to create a new Database instance with the IP-based URL
+                self._primary = Database(url.render_as_string(hide_password=False))
 
         # Retry logic for primary database connection
         max_retries = 5
@@ -215,9 +224,9 @@ class ReplicaAwareDatabase:
             while True:
                 try:
                     # Use blocking call to verify system resolver is ready
-                    socket.gethostbyname(url.host)
-                    logger.log("DATABASE", f"DNS resolved for {url.host}")
-                    return
+                    ip = socket.gethostbyname(url.host)
+                    logger.log("DATABASE", f"DNS resolved for {url.host} -> {ip}")
+                    return ip
                 except socket.gaierror:
                     retries += 1
                     wait = min(2 * retries, 15)  # Cap wait at 15s
@@ -226,9 +235,10 @@ class ReplicaAwareDatabase:
                     
                     if retries > 20: # ~5 minutes max wait then try anyway
                          logger.error("DNS resolution timing out, attempting connection anyway...")
-                         return
+                         return None
         except Exception as e:
             logger.warning(f"Error during DNS pre-check: {e}")
+            return None
 
 
 
