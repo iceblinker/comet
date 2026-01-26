@@ -52,12 +52,13 @@ class ReplicaAwareDatabase:
         if resolved_ip:
             # Reconstruct the primary database instance with the resolved IP
             # This bypasses asyncpg's internal resolution which seems flaky
-            url = make_url(str(self._primary.url))
-            if url.host != resolved_ip:
+            # IMPORTANT: Use .replace() on the URL object to preserve credentials.
+            # Convert to string forces masking (***), which caused authentication failures.
+            current_url = self._primary.url
+            if current_url.hostname != resolved_ip:
                 logger.log("DATABASE", f"Forcing connection to IP: {resolved_ip}")
-                url = url.set(host=resolved_ip)
-                # We need to create a new Database instance with the IP-based URL
-                self._primary = Database(url.render_as_string(hide_password=False))
+                # Create new Database with updated URL object
+                self._primary = Database(current_url.replace(hostname=resolved_ip))
 
         # Retry logic for primary database connection
         max_retries = 5
