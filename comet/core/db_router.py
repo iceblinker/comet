@@ -48,7 +48,20 @@ class ReplicaAwareDatabase:
                 for replica in self._configured_replicas
             ]
 
-        await self._primary.connect()
+        # Retry logic for primary database connection
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                await self._primary.connect()
+                break
+            except (socket.gaierror, OSError) as e:
+                if attempt == max_retries - 1:
+                    logger.error(f"Failed to connect to primary database after {max_retries} attempts: {e}")
+                    raise e
+                
+                wait_time = 2 ** attempt  # Exponential backoff: 1, 2, 4, 8, 16 seconds
+                logger.warning(f"Database connection failed ({e}), retrying in {wait_time}s...")
+                await asyncio.sleep(wait_time)
 
         healthy_replicas: List[Database] = []
         for replica in self._configured_replicas:
