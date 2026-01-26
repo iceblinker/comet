@@ -55,33 +55,16 @@ class ReplicaAwareDatabase:
             # This bypasses asyncpg's internal resolution which seems flaky
             # IMPORTANT: Use .replace() on the URL object to preserve credentials.
             # Convert to string forces masking (***), which caused authentication failures.
-            current_url = self._primary.url
-            if current_url.hostname != resolved_ip:
-                logger.log("DATABASE", f"Forcing connection to IP: {resolved_ip}")
                 
-                # Manual URL reconstruction to guarantee credentials are preserved
-                # We explicitely rebuild the string to avoid library masking (***) issues
-                user_part = ""
-                if current_url.username:
-                    user = quote_plus(current_url.username)
-                    user_part = f"{user}"
-                    if current_url.password:
-                        pwd = quote_plus(current_url.password)
-                        user_part += f":{pwd}"
-                    user_part += "@"
-
-                port_part = f":{current_url.port}" if current_url.port else ""
-                path_part = f"/{current_url.database}" if current_url.database else ""
+                # Use settings.DATABASE_URL as the source of truth to ensure we get the full credentials
+                # This avoids any masking that might happen in the Database object
+                from comet.core.models import settings
                 
-                query_part = ""
-                # database.DatabaseURL might not have .query, so we parse it from string
-                full_url_str = str(current_url)
-                if "?" in full_url_str:
-                    query_part = f"?{full_url_str.split('?', 1)[1]}"
-                
-                new_conn_str = f"{current_url.scheme}://{user_part}{resolved_ip}{port_part}{path_part}{query_part}"
-                
-                self._primary = Database(new_conn_str)
+                url = make_url(settings.DATABASE_URL)
+                if url.host != resolved_ip:
+                     logger.log("DATABASE", f"Forcing connection to IP: {resolved_ip}")
+                     url = url.set(host=resolved_ip)
+                     self._primary = Database(url.render_as_string(hide_password=False))
 
         # Retry logic for primary database connection
         max_retries = 5
