@@ -3,6 +3,7 @@ import contextvars
 import socket
 from contextlib import contextmanager
 from typing import List, Optional, Sequence
+from urllib.parse import quote_plus
 
 from databases import Database
 from sqlalchemy.engine.url import make_url
@@ -57,8 +58,25 @@ class ReplicaAwareDatabase:
             current_url = self._primary.url
             if current_url.hostname != resolved_ip:
                 logger.log("DATABASE", f"Forcing connection to IP: {resolved_ip}")
-                # Create new Database with updated URL object
-                self._primary = Database(current_url.replace(hostname=resolved_ip))
+                
+                # Manual URL reconstruction to guarantee credentials are preserved
+                # We explicitely rebuild the string to avoid library masking (***) issues
+                user_part = ""
+                if current_url.username:
+                    user = quote_plus(current_url.username)
+                    user_part = f"{user}"
+                    if current_url.password:
+                        pwd = quote_plus(current_url.password)
+                        user_part += f":{pwd}"
+                    user_part += "@"
+
+                port_part = f":{current_url.port}" if current_url.port else ""
+                path_part = f"/{current_url.database}" if current_url.database else ""
+                query_part = f"?{current_url.query}" if current_url.query else ""
+                
+                new_conn_str = f"{current_url.scheme}://{user_part}{resolved_ip}{port_part}{path_part}{query_part}"
+                
+                self._primary = Database(new_conn_str)
 
         # Retry logic for primary database connection
         max_retries = 5
