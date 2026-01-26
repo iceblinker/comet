@@ -48,6 +48,8 @@ class ReplicaAwareDatabase:
                 for replica in self._configured_replicas
             ]
 
+        await self._wait_for_dns(self._primary)
+
         # Retry logic for primary database connection
         max_retries = 5
         for attempt in range(max_retries):
@@ -198,6 +200,36 @@ class ReplicaAwareDatabase:
 
     def __getattr__(self, item):
         return getattr(self._primary, item)
+
+    async def _wait_for_dns(self, db: Database):
+        try:
+            url = make_url(str(db.url))
+            if not url.host:
+                return
+
+            logger.log("DATABASE", f"Checking DNS resolution for {url.host}...")
+            
+            # Retry indefinitely (or for a very long time) until DNS is ready
+            # This prevents the app from crashing during startup race conditions
+            retries = 0
+            while True:
+                try:
+                    # Use blocking call to verify system resolver is ready
+                    socket.gethostbyname(url.host)
+                    logger.log("DATABASE", f"DNS resolved for {url.host}")
+                    return
+                except socket.gaierror:
+                    retries += 1
+                    wait = min(2 * retries, 15)  # Cap wait at 15s
+                    logger.warning(f"DNS resolution for {url.host} failed (Attempt {retries}), retrying in {wait}s...")
+                    await asyncio.sleep(wait)
+                    
+                    if retries > 20: # ~5 minutes max wait then try anyway
+                         logger.error("DNS resolution timing out, attempting connection anyway...")
+                         return
+        except Exception as e:
+            logger.warning(f"Error during DNS pre-check: {e}")
+
 
 
 class _ReplicaAwareTransaction:
