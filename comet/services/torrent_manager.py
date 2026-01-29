@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import hashlib
 import re
 import time
@@ -15,9 +14,13 @@ from demagnetize.core import Demagnetizer
 from RTN import ParsedData, parse
 from torf import Magnet
 
+from comet.cometnet import get_active_backend
+from comet.cometnet.protocol import TorrentMetadata
 from comet.core.constants import TORRENT_TIMEOUT
+from comet.core.database import IS_POSTGRES, IS_SQLITE, JSON_FUNC
 from comet.core.logger import logger
 from comet.core.models import database, settings
+from comet.utils.formatting import normalize_info_hash
 from comet.utils.parsing import default_dump, ensure_multi_language, is_video
 
 TRACKER_PATTERN = re.compile(r"[&?]tr=([^&]+)")
@@ -47,9 +50,7 @@ async def download_torrent(session, url: str):
                 if match:
                     info_hash = match.group(1)
                     if len(info_hash) == 32:
-                        info_hash = base64.b16encode(
-                            base64.b32decode(info_hash)
-                        ).decode("utf-8")
+                        info_hash = normalize_info_hash(info_hash)
                     return (None, info_hash, location)
             return (None, None, None)
     except Exception as e:
@@ -114,6 +115,158 @@ def extract_torrent_metadata(content: bytes):
         return {}
 
 
+async def broadcast_torrents(torrents_params: list[dict]):
+    if not torrents_params:
+        return
+
+    backend = get_active_backend()
+    if not backend:
+        return
+
+    try:
+        clean_torrents = []
+        for params in torrents_params:
+            # Prepare clean data
+            sources = params.get("sources", [])
+            if isinstance(sources, str):
+                try:
+                    sources = orjson.loads(sources)
+                except Exception:
+                    sources = []
+
+            parsed = params.get("parsed", {})
+            if isinstance(parsed, str):
+                try:
+                    parsed = orjson.loads(parsed)
+                except Exception:
+                    parsed = {}
+
+            imdb_id = params.get("media_id")
+            if not (isinstance(imdb_id, str) and imdb_id.startswith("tt")):
+                imdb_id = None
+
+            info_hash = params.get("info_hash")
+            if not info_hash or len(info_hash) != 40:
+                continue
+
+            clean_torrents.append(
+                {
+                    "info_hash": info_hash,
+                    "title": params["title"],
+                    "size": params["size"],
+                    "tracker": params["tracker"],
+                    "imdb_id": imdb_id,
+                    "file_index": params.get("file_index", 0),
+                    "seeders": params.get("seeders", 0),
+                    "season": params.get("season"),
+                    "episode": params.get("episode"),
+                    "sources": sources,
+                    "parsed": parsed,
+                }
+            )
+
+        await torrent_broadcast_queue.add(clean_torrents)
+
+    except Exception as e:
+        logger.debug(f"CometNet broadcast error: {e}")
+
+
+class TorrentBroadcastQueue:
+    def __init__(self):
+        self.queue = asyncio.Queue()
+        self.is_running = False
+        self._lock = asyncio.Lock()
+
+    async def add(self, torrents: list[dict]):
+        if not torrents:
+            return
+
+        await self.queue.put(torrents)
+
+        if not self.is_running:
+            async with self._lock:
+                if not self.is_running:
+                    self.is_running = True
+                    asyncio.create_task(self._process_queue())
+
+    async def _process_queue(self):
+        backend = get_active_backend()
+        if not backend:
+            self.is_running = False
+            return
+
+        while self.is_running:
+            try:
+                torrents = await self.queue.get()
+
+                if torrents:
+                    await backend.broadcast_torrents(torrents)
+
+                    logger.log(
+                        "COMETNET",
+                        f"Queued {len(torrents)} torrents for broadcast via {backend.__class__.__name__}",
+                    )
+
+                self.queue.task_done()
+
+            except Exception as e:
+                logger.warning(f"Error in broadcast queue: {e}")
+                await asyncio.sleep(1)
+
+            if self.queue.empty():
+                await asyncio.sleep(1)
+                if self.queue.empty():
+                    async with self._lock:
+                        if self.queue.empty():
+                            self.is_running = False
+                            return
+
+    async def stop(self):
+        self.is_running = False
+
+
+torrent_broadcast_queue = TorrentBroadcastQueue()
+
+
+async def check_torrent_exists(info_hash: str) -> bool:
+    try:
+        query = "SELECT 1 FROM torrents WHERE info_hash = :info_hash LIMIT 1"
+        result = await database.fetch_val(query, {"info_hash": info_hash})
+        return bool(result)
+    except Exception as e:
+        logger.warning(f"Error checking torrent existence for {info_hash}: {e}")
+        return False
+
+
+async def check_torrents_exist(info_hashes: list[str]) -> set[str]:
+    """
+    Check existence of multiple torrents in a single query using JSON array expansion.
+    Returns a set of info_hashes that exist in the database.
+    """
+    if not info_hashes:
+        return set()
+
+    # Deduplicate
+    unique_hashes = list(set(info_hashes))
+
+    try:
+        query = f"""
+            SELECT info_hash FROM torrents 
+            WHERE info_hash IN (
+                SELECT CAST(value as TEXT) 
+                FROM {JSON_FUNC}(:info_hashes)
+            )
+        """
+
+        params = {"info_hashes": orjson.dumps(unique_hashes).decode("utf-8")}
+        rows = await database.fetch_all(query, params)
+
+        return {row["info_hash"] for row in rows}
+    except Exception as e:
+        logger.warning(f"Error checking batch torrent persistence: {e}")
+        return set()
+
+
 async def add_torrent(
     info_hash: str,
     seeders: int,
@@ -149,6 +302,35 @@ async def add_torrent(
                     "timestamp": time.time(),
                 }
             )
+
+        # Broadcast to CometNet
+        try:
+            episode_to_broadcast = episode_to_insert
+
+            broadcast_list = []
+            for season in seasons_to_process:
+                broadcast_list.append(
+                    {
+                        "info_hash": info_hash,
+                        "title": title,
+                        "size": size,
+                        "tracker": tracker,
+                        "media_id": media_id,
+                        "file_index": file_index,
+                        "seeders": seeders,
+                        "season": season,
+                        "episode": episode_to_broadcast,
+                        "sources": sources,
+                        "parsed": parsed.model_dump()
+                        if hasattr(parsed, "model_dump")
+                        else parsed,
+                    }
+                )
+
+            if broadcast_list:
+                await broadcast_torrents(broadcast_list)
+        except Exception:
+            pass  # Don't fail torrent insertion if CometNet fails
 
         additional = ""
         if seasons_to_process:
@@ -218,7 +400,6 @@ class AddTorrentQueue:
                                 )
                     finally:
                         self.queue.task_done()
-
             except Exception:
                 await asyncio.sleep(1)
 
@@ -247,7 +428,6 @@ class TorrentUpdateQueue:
         "_event",
         "upserts",
         "_is_postgresql",
-        "_grouped_upserts",
     )
 
     def __init__(self, batch_size: int = 1000, flush_interval: float = 5.0):
@@ -258,10 +438,13 @@ class TorrentUpdateQueue:
         self._lock = asyncio.Lock()
         self._event = asyncio.Event()
         self.upserts = {}
-        self._is_postgresql = settings.DATABASE_TYPE == "postgresql"
-        self._grouped_upserts = defaultdict(list)
+        self._is_postgresql = IS_POSTGRES
 
-    async def add_torrent_info(self, file_info: dict, media_id: str = None):
+    async def add_torrent_info(
+        self, file_info: dict, media_id: str = None, from_cometnet: bool = False
+    ):
+        # Mark if this torrent came from CometNet (to avoid re-broadcasting)
+        file_info["_from_cometnet"] = from_cometnet
         await self.queue.put((file_info, media_id))
         self._event.set()
 
@@ -351,7 +534,7 @@ class TorrentUpdateQueue:
         self.upserts = {}
 
         try:
-            grouped = self._grouped_upserts
+            grouped = defaultdict(list)
             for params in upserts_to_flush.values():
                 key = _determine_conflict_key(params["season"], params["episode"])
                 grouped[key].append(params)
@@ -369,10 +552,20 @@ class TorrentUpdateQueue:
                     "SCRAPER",
                     f"Upserted {total_upserts} torrents in batch",
                 )
+
+                # Broadcast to CometNet P2P network (only for locally discovered torrents)
+                # Filter out torrents that came from CometNet to avoid ping-pong
+                local_torrents = [
+                    p
+                    for p in upserts_to_flush.values()
+                    if not p.get("_from_cometnet", False)
+                ]
+
+                if local_torrents:
+                    await broadcast_torrents(local_torrents)
+
         except Exception as e:
             logger.warning(f"Error in flush_batch: {e}")
-        finally:
-            grouped.clear()
 
     def _process_file_info(
         self, file_info: dict, media_id: str = None, current_time: float = None
@@ -414,6 +607,9 @@ class TorrentUpdateQueue:
             params["lock_key"] = _compute_advisory_lock_key(
                 media_id, info_hash, season, episode
             )
+
+            # Preserve the CometNet origin flag to prevent re-broadcasting
+            params["_from_cometnet"] = file_info.get("_from_cometnet", False)
 
             self.upserts[upsert_key] = params
 
@@ -490,7 +686,9 @@ POSTGRES_CONFLICT_TARGETS = {
 _POSTGRES_UPSERT_CACHE: dict[str, str] = {}
 
 
-def _determine_conflict_key(season, episode):
+def _determine_conflict_key(season: int | None, episode: int | None):
+    if IS_SQLITE:
+        return "sqlite"
     if season is not None:
         return "series" if episode is not None else "season_only"
     return "episode_only" if episode is not None else "none"
@@ -561,7 +759,7 @@ async def _execute_sqlite_batched_upsert(rows: list[dict]):
 
 
 async def _execute_standard_sqlite_insert(rows: list[dict]):
-    keys_to_ignore = {"lock_key", "update_interval"}
+    keys_to_ignore = {"lock_key", "update_interval", "_from_cometnet"}
     columns = [k for k in rows[0].keys() if k not in keys_to_ignore]
     sanitized_rows = [{k: row[k] for k in columns} for row in rows]
 
@@ -586,7 +784,7 @@ async def _execute_batched_upsert(query: str, rows):
     if not rows:
         return
 
-    if settings.DATABASE_TYPE == "sqlite":
+    if IS_SQLITE:
         await _execute_sqlite_batched_upsert(rows)
         return
 
@@ -610,7 +808,11 @@ async def _execute_batched_upsert(query: str, rows):
 
             if rows_to_insert:
                 sanitized_rows = [
-                    {key: value for key, value in row.items() if key != "lock_key"}
+                    {
+                        key: value
+                        for key, value in row.items()
+                        if key not in ("lock_key", "_from_cometnet")
+                    }
                     for row in rows_to_insert
                 ]
 
@@ -621,7 +823,7 @@ async def _execute_batched_upsert(query: str, rows):
 
 
 def _get_torrent_upsert_query(conflict_key: str):
-    if settings.DATABASE_TYPE == "sqlite":
+    if IS_SQLITE:
         return SQLITE_UPSERT_QUERY
 
     target = POSTGRES_CONFLICT_TARGETS[conflict_key]
@@ -633,7 +835,7 @@ def _get_torrent_upsert_query(conflict_key: str):
 
 
 async def _upsert_torrent_record(params: dict):
-    if settings.DATABASE_TYPE == "sqlite":
+    if IS_SQLITE:
         await _execute_sqlite_batched_upsert([params])
         return
 
@@ -647,3 +849,31 @@ async def _upsert_torrent_record(params: dict):
 
 
 torrent_update_queue = TorrentUpdateQueue()
+
+
+async def save_torrent_from_network(metadata: TorrentMetadata):
+    """
+    Save a torrent received from the CometNet P2P network.
+
+    This function processes torrent metadata received from other peers
+    and queues it for insertion into the database.
+    """
+    if not isinstance(metadata, TorrentMetadata):
+        return
+
+    await torrent_update_queue.add_torrent_info(
+        {
+            "info_hash": metadata.info_hash,
+            "index": metadata.file_index,
+            "season": metadata.season,
+            "episode": metadata.episode,
+            "title": metadata.title,
+            "seeders": metadata.seeders,
+            "size": metadata.size,
+            "tracker": metadata.tracker,
+            "sources": metadata.sources,
+            "parsed": metadata.parsed,
+        },
+        media_id=metadata.imdb_id,
+        from_cometnet=True,
+    )

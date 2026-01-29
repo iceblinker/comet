@@ -4,8 +4,9 @@ import time
 import aiohttp
 import orjson
 
+from comet.core.database import ON_CONFLICT_DO_NOTHING, OR_IGNORE, database
 from comet.core.logger import logger
-from comet.core.models import database, settings
+from comet.core.models import settings
 from comet.services.anime import anime_mapper
 from comet.utils.parsing import parse_media_id
 
@@ -20,26 +21,16 @@ _CACHE_SELECT_QUERY = """
     AND timestamp >= :min_timestamp
 """
 
-_CACHE_INSERT_SQLITE = """
-    INSERT OR IGNORE INTO metadata_cache
+_CACHE_INSERT_QUERY = f"""
+    INSERT {OR_IGNORE} INTO metadata_cache
     VALUES (:media_id, :title, :year, :year_end, :aliases, :timestamp)
-"""
-
-_CACHE_INSERT_POSTGRESQL = """
-    INSERT INTO metadata_cache
-    VALUES (:media_id, :title, :year, :year_end, :aliases, :timestamp)
-    ON CONFLICT DO NOTHING
+    {ON_CONFLICT_DO_NOTHING}
 """
 
 
 class MetadataScraper:
     def __init__(self, session: aiohttp.ClientSession):
         self.session = session
-        self._cache_insert_query = (
-            _CACHE_INSERT_SQLITE
-            if settings.DATABASE_TYPE == "sqlite"
-            else _CACHE_INSERT_POSTGRESQL
-        )
 
     async def get_from_cache_by_media_id(
         self, media_id: str, id: str, season: int | None, episode: int | None
@@ -118,7 +109,7 @@ class MetadataScraper:
 
     async def cache_metadata(self, media_id: str, metadata: dict, aliases: dict):
         await database.execute(
-            self._cache_insert_query,
+            _CACHE_INSERT_QUERY,
             {
                 "media_id": media_id,
                 "title": metadata["title"],
@@ -213,9 +204,10 @@ class MetadataScraper:
 
         trakt_aliases = await get_trakt_aliases(self.session, media_type, media_id)
         if trakt_aliases:
+            total_aliases = sum(len(titles) for titles in trakt_aliases.values())
             logger.log(
                 "SCRAPER",
-                f"📜 Found {len(trakt_aliases['ez'])} Trakt title aliases for {media_id}",
+                f"📜 Found {total_aliases} Trakt title aliases for {media_id}",
             )
         else:
             logger.log("SCRAPER", f"📜 No Trakt title aliases found for {media_id}")

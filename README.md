@@ -2,6 +2,7 @@
 <p align="center"><img src="https://socialify.git.ci/g0ldyy/comet/image?description=1&font=Inter&forks=1&language=1&name=1&owner=1&pattern=Solid&stargazers=1&theme=Dark" /></p>
 
 # Features
+- **CometNet**: Decentralized P2P network for automatic torrent metadata sharing ([documentation](docs/cometnet/README.md))
 - The first Stremio addon to Proxy Debrid Streams to allow use of the Debrid Service on multiple IPs at the same time on the same account!
 - IP-Based Max Connection Limit
 - Administration Dashboard with Bandwidth Manager, Metrics and more...
@@ -61,21 +62,15 @@ ElfHosted offer "one-click" [private Comet instances](https://elfhosted.com/app/
       docker compose up -d
     ```
 
-### Nginx Reverse Proxy
-If you want to serve Comet via a Nginx Reverse Proxy, here's the configuration you should use.
-```
-server {
-    server_name example.com;
+# CometNet (P2P Network)
+Comet transforms your Comet instance from an isolated scraper into a participant in a collaborative network. Instead of each instance independently discovering the same torrents, CometNet allows instances to share their discovered **metadata** (hashes, titles, etc.) with each other in a decentralized way. **No actual files are shared.**
 
-    location / {
-        proxy_pass http://localhost:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
+Key benefits:
+- **Improved Coverage**: Receive torrent metadata discovered by other nodes.
+- **Reduced Load**: Less redundant scraping across the network.
+- **Trust Pools**: Optional closed groups for trusted metadata sharing.
+
+For more information on how to setup and configure CometNet, please refer to the [CometNet Documentation](docs/cometnet/README.md).
 
 ## Support the Project
 Comet is a community-driven project, and your support helps it grow! 🚀
