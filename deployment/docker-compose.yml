@@ -3,8 +3,8 @@ services:
     container_name: comet
     image: g0ldyy/comet
     restart: unless-stopped
-    ports:
-      - "8000:8000"
+    #    ports:
+    #      - "8000:8000"
     environment:
       DATABASE_TYPE: ${DATABASE_TYPE:-postgresql}
       DATABASE_URL: ${DATABASE_URL:-comet:comet@postgres:5432/comet}
