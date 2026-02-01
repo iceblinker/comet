@@ -18,7 +18,7 @@ from comet.core.logger import logger
 
 class AppSettings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="allow"
+        env_file=None, extra="allow"
     )
 
     ADDON_ID: Optional[str] = "stremio.comet.fast"
@@ -37,7 +37,7 @@ class AppSettings(BaseSettings):
     DATABASE_URL: Optional[str] = "username:password@hostname:port"
     DATABASE_PATH: Optional[str] = "data/comet.db"
     DATABASE_BATCH_SIZE: Optional[int] = 20000
-    DATABASE_READ_REPLICA_URLS: List[str] = Field(default_factory=list)
+    DATABASE_READ_REPLICA_URLS: Union[List[str], str] = Field(default_factory=list)
     DATABASE_STARTUP_CLEANUP_INTERVAL: Optional[int] = 3600
     DATABASE_FORCE_IPV4_RESOLUTION: Optional[bool] = False
     METADATA_CACHE_TTL: Optional[int] = 2592000  # 30 days
@@ -340,6 +340,29 @@ class AppSettings(BaseSettings):
         if isinstance(scraper_setting, str):
             scraper_setting = scraper_setting.lower()
             return scraper_setting in ["true", "both", "live", "background"]
+
+    @field_validator(
+        "DATABASE_READ_REPLICA_URLS",
+        "INDEXER_MANAGER_INDEXERS",
+        "JACKETT_INDEXERS",
+        "PROWLARR_INDEXERS",
+        "COMETNET_BOOTSTRAP_NODES",
+        "COMETNET_MANUAL_PEERS",
+        "COMETNET_TRUSTED_POOLS",
+        "COMETNET_INGEST_POOLS",
+        mode="before",
+    )
+    def normalize_list_types(cls, v):
+        if v is None or v == "" or v == "[]" or v == "''" or v == '""':
+            return []
+        if isinstance(v, str):
+            try:
+                import json
+                return json.loads(v)
+            except:
+                # Handle comma-separated values as fallback
+                return [i.strip() for i in v.split(",") if i.strip()]
+        return v
 
     def model_post_init(self, __context):
         if self.INDEXER_MANAGER_TYPE == "jackett":
