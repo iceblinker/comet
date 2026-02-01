@@ -13,7 +13,7 @@ services:
     volumes:
       - comet_data:/app/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8000/health"]
+      test: [ "CMD-SHELL", "wget -qO- http://127.0.0.1:8000/health" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -21,6 +21,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - ai_network
+      - caddy_net
 
   postgres:
     container_name: comet-postgres
@@ -53,10 +56,18 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U comet -d comet"]
+      test: [ "CMD-SHELL", "pg_isready -U comet -d comet" ]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - ai_network
+
+networks:
+  ai_network:
+    external: true
+  caddy_net:
+    external: true
 
 volumes:
   comet_data:
