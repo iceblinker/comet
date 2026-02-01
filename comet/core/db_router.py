@@ -25,6 +25,7 @@ class ReplicaAwareDatabase:
         self._force_ipv4 = force_ipv4
         self._active_replicas: List[Database] = []
         self._replica_index = 0
+        self._connect_lock = asyncio.Lock()
         self._transaction_depth = contextvars.ContextVar(
             "comet_db_replica_tx_depth", default=0
         )
@@ -40,66 +41,76 @@ class ReplicaAwareDatabase:
     def is_connected(self):
         return self._primary.is_connected
 
-    async def connect(self):
-        # Handle IP resolution override
-        if self._force_ipv4:
-            self._primary = await self._resolve_and_recreate(self._primary)
-            self._configured_replicas = [
-                await self._resolve_and_recreate(replica)
-                for replica in self._configured_replicas
-            ]
+    async def connect(self, database_url: Optional[str] = None):
+        async with self._connect_lock:
+            if self._primary.is_connected:
+                return
 
-        resolved_ip = await self._wait_for_dns(self._primary)
-        if resolved_ip:
-            # Reconstruct the primary database instance with the resolved IP
-            # This bypasses asyncpg's internal resolution which seems flaky
-            # IMPORTANT: Use .replace() on the URL object to preserve credentials.
-            # Convert to string forces masking (***), which caused authentication failures.
+            # Handle IP resolution override
+            if self._force_ipv4:
+                self._primary = await self._resolve_and_recreate(self._primary)
+                self._configured_replicas = [
+                    await self._resolve_and_recreate(replica)
+                    for replica in self._configured_replicas
+                ]
+
+            resolved_ip = await self._wait_for_dns(self._primary)
+            if resolved_ip:
+                # Reconstruct the primary database instance with the resolved IP
+                # This bypasses asyncpg's internal resolution which seems flaky
+                # IMPORTANT: Preserving the driver (e.g. +asyncpg) is critical.
                 
-                # Use settings.DATABASE_URL as the source of truth to ensure we get the full credentials
-                # This avoids any masking that might happen in the Database object
-                from comet.core.models import settings
+                source_url = database_url
+                if not source_url:
+                    from comet.core.models import settings
+                    source_url = settings.DATABASE_URL
                 
-                url = make_url(settings.DATABASE_URL)
+                url = make_url(source_url)
                 if url.host != resolved_ip:
-                     logger.log("DATABASE", f"Forcing connection to IP: {resolved_ip}")
-                     url = url.set(host=resolved_ip)
-                     self._primary = Database(url.render_as_string(hide_password=False))
+                    logger.log("DATABASE", f"Forcing connection to IP: {resolved_ip}")
+                    url = url.set(host=resolved_ip)
+                    
+                    # Ensure we keep the driver if it was there (e.g. postgresql+asyncpg)
+                    new_url_str = url.render_as_string(hide_password=False)
+                    if "postgresql" in new_url_str and "+asyncpg" not in new_url_str:
+                        new_url_str = new_url_str.replace("postgresql://", "postgresql+asyncpg://")
 
-        # Retry logic for primary database connection
-        max_retries = 5
-        for attempt in range(max_retries):
-            try:
-                await self._primary.connect()
-                break
-            except (socket.gaierror, OSError) as e:
-                if attempt == max_retries - 1:
-                    logger.error(f"Failed to connect to primary database after {max_retries} attempts: {e}")
-                    raise e
-                
-                wait_time = 2 ** attempt  # Exponential backoff: 1, 2, 4, 8, 16 seconds
-                logger.warning(f"Database connection failed ({e}), retrying in {wait_time}s...")
-                await asyncio.sleep(wait_time)
+                    self._primary = Database(new_url_str)
 
-        healthy_replicas: List[Database] = []
-        for replica in self._configured_replicas:
-            try:
-                await replica.connect()
-            except Exception as exc:  # pragma: no cover - defensive logging
+            # Retry logic for primary database connection
+            max_retries = 5
+            for attempt in range(max_retries):
+                try:
+                    await self._primary.connect()
+                    break
+                except (socket.gaierror, OSError, Exception) as e:
+                    if attempt == max_retries - 1:
+                        logger.error(f"Failed to connect to primary database after {max_retries} attempts: {e}")
+                        raise e
+                    
+                    wait_time = 2 ** attempt  # Exponential backoff: 1, 2, 4, 8, 16 seconds
+                    logger.warning(f"Database connection failed ({e}), retrying in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+
+            healthy_replicas: List[Database] = []
+            for replica in self._configured_replicas:
+                try:
+                    await replica.connect()
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    logger.log(
+                        "DATABASE",
+                        f"Read replica connection failed ({getattr(replica, 'url', 'replica')}): {exc}",
+                    )
+                else:
+                    healthy_replicas.append(replica)
+
+            self._active_replicas = healthy_replicas
+
+            if self._active_replicas:
                 logger.log(
                     "DATABASE",
-                    f"Read replica connection failed ({getattr(replica, 'url', 'replica')}): {exc}",
+                    f"Read replicas enabled ({len(self._active_replicas)} healthy)",
                 )
-            else:
-                healthy_replicas.append(replica)
-
-        self._active_replicas = healthy_replicas
-
-        if self._active_replicas:
-            logger.log(
-                "DATABASE",
-                f"Read replicas enabled ({len(self._active_replicas)} healthy)",
-            )
 
     async def disconnect(self):
         for db in [self._primary, *self._configured_replicas]:
@@ -156,6 +167,13 @@ class ReplicaAwareDatabase:
             if self._should_use_primary(force_primary)
             else self._next_replica()
         )
+
+        if not target.is_connected:
+            logger.warning(f"Database ({method_name}) target is not connected. Attempting reconnection...")
+            try:
+                await self.connect()
+            except Exception as e:
+                logger.error(f"Defensive reconnection failed: {e}")
 
         method = getattr(target, method_name)
         try:
