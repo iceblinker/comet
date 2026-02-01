@@ -1,7 +1,10 @@
 services:
   comet:
     container_name: comet
-    image: g0ldyy/comet
+    # image: g0ldyy/comet
+    build:
+      context: ..
+      dockerfile: Dockerfile
     restart: unless-stopped
     #    ports:
     #      - "8000:8000"
