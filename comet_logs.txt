@@ -1,0 +1,30 @@
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - MediaFusion Scraper: False - Live Search: True
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - AIOStreams Scraper: False
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - Jackettio Scraper: False
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - Debridio Scraper: False
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - TorBox Scraper: False
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - TorrentsDB Scraper: False
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - Peerflix Scraper: False
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - DMM Scraper: False
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - DMM Ingester: False
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - Debrid Stream Proxy: False
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - StremThru URL: https://stremthru.13377001.xyz
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - Disable Torrent Streams: False
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - Remove Adult Content: False
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - Smart Language Detection: False
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - RTN Filter Debug: False
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - Digital Release Filter: False
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - TMDB Read Access Token: # Optional: Provide your own TMDB Read Acces*********************************************
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - Custom Header HTML: True
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - HTTP Cache: False
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - Background Scraper: False
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - Generic Trackers: False
+2026-01-29 01:49:48 | 🌠 COMET | logger.log_startup_info - CometNet P2P: False
+2026-01-29 01:49:48 | 🌠 COMET | main.run_with_gunicorn - Starting with gunicorn using 1 workers
+2026-01-29 01:49:48 | 💾 DATABASE | db_router._wait_for_dns - Checking DNS resolution for comet-db...
+2026-01-29 01:49:48 | 💾 DATABASE | db_router._wait_for_dns - DNS resolved for comet-db -> 172.19.0.12
+2026-01-29 01:49:48 | 💾 DATABASE | db_router.connect - Forcing connection to IP: 172.19.0.12
+2026-01-29 01:49:50 | 🌠 COMET | database.setup_database - Database: Migration from None to 1.0 version
+2026-01-29 01:49:50 | 🌠 COMET | database.setup_database - Database: Migration to version 1.0 completed
+2026-01-29 01:49:51 | 💾 DATABASE | database._run_startup_cleanup - Running startup cleanup sweep
+2026-01-29 01:49:51 | 🌠 COMET | anime._refresh_from_remote - Downloading anime mapping (Source 1/3: Anime Offline Database)...

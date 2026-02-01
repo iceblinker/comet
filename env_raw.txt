@@ -1,0 +1,301 @@
+﻿#=================================================#
+#   â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ•—   â–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—  #
+#  â–ˆâ–ˆâ•”â•â•â•â•â•â–ˆâ–ˆâ•”â•â•â•â–ˆâ–ˆâ•—â–ˆâ–ˆâ–ˆâ–ˆâ•— â–ˆâ–ˆâ–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•â•â•â•šâ•â•â–ˆâ–ˆâ•”â•â•â•  #
+#  â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•‘   â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â–ˆâ–ˆâ–ˆâ–ˆâ•”â–ˆâ–ˆâ•‘â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—     â–ˆâ–ˆâ•‘     #
+#  â–ˆâ–ˆâ•‘     â–ˆâ–ˆâ•‘   â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•‘â•šâ–ˆâ–ˆâ•”â•â–ˆâ–ˆâ•‘â–ˆâ–ˆâ•”â•â•â•     â–ˆâ–ˆâ•‘     #
+#  â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—â•šâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•”â•â–ˆâ–ˆâ•‘ â•šâ•â• â–ˆâ–ˆâ•‘â–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ–ˆâ•—   â–ˆâ–ˆâ•‘     #
+#   â•šâ•â•â•â•â•â• â•šâ•â•â•â•â•â• â•šâ•â•     â•šâ•â•â•šâ•â•â•â•â•â•â•   â•šâ•â•     #
+#=================================================#
+#          Thank you for using Comet! ðŸš€          #
+#=================================================#
+
+# âš ï¸ IMPORTANT: DO NOT copy the entire content of this file to your .env file.
+# Only copy and modify the variables you need to change.
+# The default values shown in this file are automatically loaded by Comet.
+
+# ============================== #
+# Stremio Addon Configuration    #
+# ============================== #
+ADDON_ID=stremio.comet.fast
+ADDON_NAME=Comet
+
+# ============================== #
+# FastAPI Server Configuration   #
+# ============================== #
+FASTAPI_HOST=0.0.0.0
+FASTAPI_PORT=8000
+FASTAPI_WORKERS=1 # DO NOT change this if you don't know what you are doing. Setting this to -1 will spawn a worker for each CPU core, which can consume several GBs of RAM and cause high CPU usage.
+USE_GUNICORN=True # Will use uvicorn if False or if on Windows
+GUNICORN_PRELOAD_APP=True # Set to False to start workers without preloading the app (reduces startup cost but requires schema to exist)
+EXECUTOR_MAX_WORKERS=1 # Max workers for ProcessPoolExecutor (handles CPU-intensive tasks like RTN parsing). Recommended: 1. Do not exceed 4 unless you have a high-end machine.
+
+# ============================== #
+# Playback Settings              #
+# ============================== #
+PUBLIC_BASE_URL= # Optional: force playback URLs to use this public base (e.g. https://comet.example.com). Leave empty to use the request host.
+
+# ============================== #
+# Dashboard Settings             #
+# ============================== #
+ADMIN_DASHBOARD_PASSWORD=c@N@DI3nn3B3LT # The password to access the dashboard
+PUBLIC_METRICS_API=False # Set to True to allow public access to the metrics API (/admin/api/metrics)
+
+# ============================== #
+# Database Configuration         #
+# ============================== #
+# âš ï¸  WARNING: SQLite has POOR CONCURRENCY support and should ONLY be used for development/testing!
+# SQLite cannot handle multiple concurrent writers well, leading to:
+#   - "database is locked" errors with multiple workers
+#   - Performance issues with background scraper
+#   - Data corruption risks under heavy load
+# For production deployments, use PostgreSQL!
+DATABASE_TYPE=postgresql # Options: sqlite, postgresql - Use postgresql for production, sqlite for development only
+DATABASE_FORCE_IPV4_RESOLUTION=False # Set to True to force resolving the database hostname to an IPv4 address (fix for asyncpg on ARM64 - only if you are using postgresql)
+DATABASE_URL=postgresql://comet:comet@comet-db:5432/comet # For PostgreSQL (user:password@host:port/database)
+DATABASE_PATH=data/comet.db # Only relevant for SQLite (development only)
+DATABASE_BATCH_SIZE=20000 # The batch size for the database import and export operations
+DATABASE_READ_REPLICA_URLS=[] # Optional JSON array of PostgreSQL read-only URLs, e.g. '["user:pass@replica-1/db", "user:pass@replica-2/db"]'
+DATABASE_STARTUP_CLEANUP_INTERVAL=3600 # Minimum seconds between heavy startup cleanup sweeps (0=every start, -1=disable)
+
+# ============================== #
+# Cache Settings (Seconds)       #
+# ============================== #
+METADATA_CACHE_TTL=2592000  # 30 days
+
+# TORRENT_CACHE_TTL: Controls when torrents are PERMANENTLY REMOVED from the database.
+#    Set to -1 to disable automatic removal (torrents stay forever).
+TORRENT_CACHE_TTL=2592000  # 30 days
+
+# LIVE_TORRENT_CACHE_TTL: Controls when a NEW LIVE SEARCH is triggered.
+#    If the cache is older than this value, Comet performs a new search to find new torrents.
+#    Important: Old cached torrents are ALWAYS included in results, this only controls refresh frequency.
+#    Set to -1 to never trigger new searches (always use existing cache only).
+LIVE_TORRENT_CACHE_TTL=604800  # 7 days
+
+DEBRID_CACHE_TTL=86400  # 1 day
+DEBRID_CACHE_CHECK_RATIO=0.0  # Minimum ratio (0.5 = 5%) of cached torrents/total torrents required to skip re-checking availability on the debrid service.
+METRICS_CACHE_TTL=60  # 1 minute
+SCRAPE_LOCK_TTL=300  # 5 minutes - Duration for distributed scraping locks
+SCRAPE_WAIT_TIMEOUT=30  # 30 seconds - Max time to wait for other instance to complete scraping
+
+# ======================================================= #
+# Background Scraper                                      #
+# Zilean and no-ratelimit indexers/scrapers recommended!  #
+# PostgreSQL recommended for high worker count!           #
+# ======================================================= #
+BACKGROUND_SCRAPER_ENABLED=False
+BACKGROUND_SCRAPER_CONCURRENT_WORKERS=1 # Number of concurrent workers for scraping (adjust depending on whether you are often ratelimited by scrapers)
+BACKGROUND_SCRAPER_INTERVAL=3600 # Interval between scraping cycles in seconds
+BACKGROUND_SCRAPER_MAX_MOVIES_PER_RUN=100 # Maximum number of movies to scrape per run
+BACKGROUND_SCRAPER_MAX_SERIES_PER_RUN=100 # Maximum number of series to scrape per run
+CATALOG_TIMEOUT=30 # Max time to fetch catalog pages (seconds)
+
+# ============================== #
+# Anime Mapping Configuration    #
+# ============================== #
+# Anime Mapping is used to match IMDb/Kitsu IDs to Anime specific IDs (AniList, MAL, Kitsu, etc.) to retrieve title aliases.
+# This greatly improves title matching performances for anime content by using accurate alternative titles.
+ANIME_MAPPING_ENABLED=True
+ANIME_MAPPING_REFRESH_INTERVAL=432000 # Seconds between background anime mapping refreshes when using database cache (<=0 disables)
+
+# ============================== #
+# Networking & Proxy Configuration #
+# ============================== #
+GLOBAL_PROXY_URL= # Global proxy for all outbound requests (e.g. http://user:pass@host:port)
+PROXY_ETHOS=always # always: use proxy for everything; on_failure: retry with proxy if direct fails (not recommended); never: never use proxy (unless specific scraper override)
+# Scraper specific proxies can be set using [SCRAPERNAME]_PROXY_URL
+# Example: TORRENTIO_PROXY_URL=http://...
+
+RATELIMIT_MAX_RETRIES=3 # Maximum number of retries for 429 Too Many Requests errors. Set to 0 to disable retries.
+RATELIMIT_RETRY_BASE_DELAY=1.0 # Base delay in seconds for exponential backoff (e.g., 1.0 -> 1s, 2s, 4s, 8s...)
+
+# ============================== #
+# Jackett & Prowlarr Settings    #
+# ============================== #
+
+# Jackett Configuration
+SCRAPE_JACKETT=False # Context mode: live, background, both, false
+JACKETT_URL=http://127.0.0.1:9117
+JACKETT_API_KEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+JACKETT_INDEXERS=[] # Leave empty to automatically use all configured/healthy indexers. Or specify a list of indexer IDs to use (e.g. '["oxtorrent", "torrent9"]').
+
+# Prowlarr Configuration
+SCRAPE_PROWLARR=False # Context mode: live, background, both, false
+PROWLARR_URL=http://127.0.0.1:9696
+PROWLARR_API_KEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+PROWLARR_INDEXERS=[] # Leave empty to automatically use all configured/healthy indexers. Or specify a list of indexer IDs.
+
+# Shared Settings
+INDEXER_MANAGER_TIMEOUT=30  # Max time to get search results (seconds) - Shared by both
+INDEXER_MANAGER_WAIT_TIMEOUT=30 # Max time to wait for the indexer manager to initialize (seconds)
+INDEXER_MANAGER_UPDATE_INTERVAL=900 # Time in seconds between indexer updates (default: 900s / 15m)
+
+# ============================== #
+# Torrent Settings               #
+# ============================== #
+GET_TORRENT_TIMEOUT=5 # Max time to download .torrent file (seconds)
+DOWNLOAD_TORRENT_FILES=False # Enable torrent file retrieval from magnet link
+MAGNET_RESOLVE_TIMEOUT=60 # Max time to resolve a magnet link (seconds)
+DOWNLOAD_GENERIC_TRACKERS=False # Enable downloading generic trackers list at startup (for scraped torrents without trackers, doesn't work well most of the time)
+
+# ============================== #
+# Scraping Configuration         #
+# ============================== #
+# Multi-Instance Scraping Support:
+# - Single URL: Use a simple string for one instance (default behavior)
+# - Multiple URLs: Use JSON array format for multiple instances
+# - Example single: COMET_URL=https://comet.feels.legal
+# - Example multi: COMET_URL='["https://comet1.example.com", "https://comet2.example.com"]'
+#
+# Scraper Context Modes:
+# Each SCRAPE_* setting can control when scrapers are used:
+# - true/both: Used for live scraping AND background scraping (default)
+# - live: Only used for live scraping (when users request content)
+# - background: Only used for background scraping (automatic content pre-caching)
+# - false: Completely disabled
+#
+# Examples:
+# SCRAPE_COMET=both          # Used for both live and background scraping
+# SCRAPE_TORRENTIO=live      # Fast live scraping only
+# SCRAPE_ZILEAN=background   # Background cache building only
+# SCRAPE_NYAA=false          # Completely disabled
+# SCRAPE_JACKETT=live        # Jackett for live scraping only
+# SCRAPE_PROWLARR=background # Prowlarr for background scraping only
+
+SCRAPE_COMET=False
+COMET_URL=https://comet.feels.legal
+# Multi-instance example:
+# COMET_URL='["https://comet1.example.com", "https://comet2.example.com"]'
+
+SCRAPE_NYAA=False
+NYAA_ANIME_ONLY=True # Only scrape Nyaa if the content is anime
+NYAA_MAX_CONCURRENT_PAGES=5 # Maximum number of concurrent requests to Nyaa (consider reducing if you are often ratelimited by Nyaa)
+
+SCRAPE_ANIMETOSHO=False
+ANIMETOSHO_ANIME_ONLY=True # Only scrape AnimeTosho if the content is anime
+ANIMETOSHO_MAX_CONCURRENT_PAGES=10 # Maximum number of concurrent requests to AnimeTosho (consider reducing if you are often ratelimited by AnimeTosho)
+
+SCRAPE_ZILEAN=False
+ZILEAN_URL=https://zileanfortheweebs.midnightignite.me
+# Multi-instance example:
+# ZILEAN_URL='["https://zilean1.example.com", "https://zilean2.example.com"]'
+
+SCRAPE_STREMTHRU=False
+STREMTHRU_SCRAPE_URL=https://stremthru.13377001.xyz
+# Multi-instance example:
+# STREMTHRU_SCRAPE_URL='["https://stremthru1.example.com", "https://stremthru2.example.com"]'
+
+SCRAPE_BITMAGNET=False
+BITMAGNET_URL=https://bitmagnetfortheweebs.midnightignite.me
+BITMAGNET_MAX_CONCURRENT_PAGES=5
+BITMAGNET_MAX_OFFSET=15000 # Maximum number of entries to scrape
+# Multi-instance example:
+# BITMAGNET_URL='["https://bitmagnet1.example.com", "https://bitmagnet2.example.com"]'
+
+SCRAPE_TORRENTIO=False
+TORRENTIO_URL=https://torrentio.strem.fun
+# Multi-instance example:
+# TORRENTIO_URL='["https://torrentio.strem.fun", "https://custom-torrentio.example.com"]'
+
+SCRAPE_MEDIAFUSION=False
+MEDIAFUSION_URL=https://mediafusion.elfhosted.com
+MEDIAFUSION_API_PASSWORD= # API password for MediaFusion instances that require authentication
+MEDIAFUSION_LIVE_SEARCH=True
+# Multi-instance MediaFusion examples:
+# MEDIAFUSION_URL='["https://mediafusion1.example.com", "https://mediafusion2.example.com"]'
+# MEDIAFUSION_API_PASSWORD='["password1", "password2"]' # One password per URL in same order
+# MEDIAFUSION_API_PASSWORD=single_password # Same password for all instances
+# MEDIAFUSION_API_PASSWORD= # No password for any instance
+
+SCRAPE_AIOSTREAMS=False
+AIOSTREAMS_URL=https://aio.example.com
+AIOSTREAMS_USER_UUID_AND_PASSWORD=user_uuid:password
+# Multi-instance AIOStreams examples:
+# AIOSTREAMS_URL='["https://aio1.example.com", "https://aio2.example.com"]'
+# AIOSTREAMS_USER_UUID_AND_PASSWORD='["uuid1:password1", "uuid2:password2"]' # One credential per URL in same order
+# AIOSTREAMS_USER_UUID_AND_PASSWORD=single_uuid:single_password # Same credentials for all instances
+
+SCRAPE_JACKETTIO=False
+JACKETTIO_URL=https://jackettio.example.com # Full manifest URL without /manifest.json at the end
+# Multi-instance example:
+# JACKETTIO_URL='["https://jackettio1.example.com", "https://jackettio2.example.com"]'
+
+SCRAPE_DEBRIDIO=False
+DEBRIDIO_API_KEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+DEBRIDIO_PROVIDER=realdebrid # alldebrid, debrider, debridlink, easydebrid, premiumize, realdebrid, torbox
+DEBRIDIO_PROVIDER_KEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+SCRAPE_TORBOX=False
+TORBOX_API_KEY=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+SCRAPE_TORRENTSDB=False
+
+SCRAPE_PEERFLIX=False
+
+# ============================== #
+# Debrid Stream Proxy Settings   #
+# ============================== #
+PROXY_DEBRID_STREAM=False
+PROXY_DEBRID_STREAM_PASSWORD=CHANGE_ME
+PROXY_DEBRID_STREAM_MAX_CONNECTIONS=-1 # -1 to disable connection limits
+PROXY_DEBRID_STREAM_DEBRID_DEFAULT_SERVICE=realdebrid
+PROXY_DEBRID_STREAM_DEBRID_DEFAULT_APIKEY=CHANGE_ME
+PROXY_DEBRID_STREAM_INACTIVITY_THRESHOLD=300 # Seconds to wait before cleaning up an inactive connection. Set to 0 to disable.
+
+# ============================== #
+# Torrent Stream Policy          #
+# ============================== #
+DISABLE_TORRENT_STREAMS=False # When true, torrent-only requests return a friendly message instead of magnets
+TORRENT_DISABLED_STREAM_NAME=[INFO] Comet # Stremio stream name shown when torrents are disabled
+TORRENT_DISABLED_STREAM_DESCRIPTION=Direct torrent playback is disabled on this server. # Description shown to users in Stremio
+TORRENT_DISABLED_STREAM_URL=https://comet.feels.legal # Optional URL included in the placeholder stream response
+
+# ============================== #
+# Content Filtering              #
+# ============================== #
+REMOVE_ADULT_CONTENT=False
+RTN_FILTER_DEBUG=False # Set to True to log why torrents are excluded by RTN (debug only, verbose!)
+DIGITAL_RELEASE_FILTER=False # Filter unreleased content
+TMDB_READ_ACCESS_TOKEN= # Optional: Provide your own TMDB Read Access Token to avoid using the shared default key
+
+# ============================== #
+# UI Customization               #
+# ============================== #
+CUSTOM_HEADER_HTML=None
+
+# ============================== #
+# StremThru Integration          #
+# ============================== #
+STREMTHRU_URL=https://stremthru.13377001.xyz # needed to use debrid services
+
+# ============================== #
+# HTTP Cache Settings            #
+# ============================== #
+# These settings control HTTP-level caching.
+# Comet sends proper Cache-Control headers that can be respected by proxies.
+#
+# Key cacheable endpoints:
+# - /stream/{type}/{id}.json (PUBLIC - shared cache, no user config)
+# - /{config}/stream/... (PRIVATE - user-specific, browser only)
+# - /configure (PUBLIC/PRIVATE - depends on CUSTOM_HEADER_HTML)
+
+HTTP_CACHE_ENABLED=False # Master switch for HTTP cache headers
+
+# STREAMS streams TTL (for /stream/movie/tt1234567.json)
+# These results are cached at edge and shared between all users.
+# Higher = less traffic to origin, Lower = faster updates for new content
+HTTP_CACHE_STREAMS_TTL=300 # 5 minutes
+
+# Stale-While-Revalidate: serve stale content while fetching fresh in background
+# Improves perceived performance - users get instant response with cached data
+HTTP_CACHE_STALE_WHILE_REVALIDATE=60 # 1 minute
+
+# MANIFEST TTL (for /manifest.json and /{config}/manifest.json)
+# Manifest rarely changes, can be cached longer
+HTTP_CACHE_MANIFEST_TTL=86400 # 24 hours (recommended: 3600-86400)
+
+# CONFIGURE page TTL (for /configure and /{config}/configure)
+# Static page, can be cached for a long time
+HTTP_CACHE_CONFIGURE_TTL=86400 # 24 hours (recommended: 3600-86400)
+
+
