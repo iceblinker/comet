@@ -32,7 +32,7 @@ async def setup_database():
             if not os.path.exists(settings.DATABASE_PATH):
                 open(settings.DATABASE_PATH, "a").close()
 
-        await database.connect()
+        await database.connect(settings.DATABASE_URL)
 
         await _migrate_indexes()
 
