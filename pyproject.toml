@@ -16,7 +16,7 @@ dependencies = [
     "databases",
     "demagnetize",
     "fastapi",
-    "gunicorn",
+    "gunicorn; sys_platform != 'win32'",
     "jinja2",
     "loguru",
     "mediaflow-proxy==2.4.1",

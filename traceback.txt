@@ -1,0 +1,22 @@
+Traceback (most recent call last):
+  File "E:\GitHub\comet\debug_startup.py", line 5, in <module>
+    import comet.main
+  File "E:\GitHub\comet\comet\main.py", line 11, in <module>
+    from comet.api.app import app
+  File "E:\GitHub\comet\comet\api\app.py", line 12, in <module>
+    from comet.api.endpoints import (admin, base, chilllink, cometnet, cometnet_ui,
+  File "E:\GitHub\comet\comet\api\endpoints\playback.py", line 13, in <module>
+    from comet.services.streaming.manager import custom_handle_stream_request
+  File "E:\GitHub\comet\comet\services\streaming\manager.py", line 4, in <module>
+    import mediaflow_proxy.handlers
+  File "E:\GitHub\comet\.venv\Lib\site-packages\mediaflow_proxy\handlers.py", line 13, in <module>
+    from .mpd_processor import process_manifest, process_playlist, process_segment, process_init_segment
+  File "E:\GitHub\comet\.venv\Lib\site-packages\mediaflow_proxy\mpd_processor.py", line 16, in <module>
+    from mediaflow_proxy.utils.dash_prebuffer import dash_prebuffer
+  File "E:\GitHub\comet\.venv\Lib\site-packages\mediaflow_proxy\utils\dash_prebuffer.py", line 13, in <module>
+    from mediaflow_proxy.utils.base_prebuffer import BasePrebuffer
+  File "E:\GitHub\comet\.venv\Lib\site-packages\mediaflow_proxy\utils\base_prebuffer.py", line 17, in <module>
+    from mediaflow_proxy.utils.cache_utils import (
+  File "E:\GitHub\comet\.venv\Lib\site-packages\mediaflow_proxy\utils\cache_utils.py", line 2, in <module>
+    import fcntl
+ModuleNotFoundError: No module named 'fcntl'
